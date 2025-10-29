@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">TriFeDetect</string>
+    <string name="bt_pair_page_title">蓝牙配对</string>
+</resources>
