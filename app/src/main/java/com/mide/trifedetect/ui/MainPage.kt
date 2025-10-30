@@ -6,17 +6,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -27,6 +30,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
@@ -37,6 +41,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -46,15 +51,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mide.trifedetect.BluetoothDeviceItem
 import com.mide.trifedetect.MainActivity
 import com.mide.trifedetect.R
 import com.mide.trifedetect.ui.theme.TriFeDetectTheme
+import kotlinx.coroutines.delay
 
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
@@ -141,8 +149,14 @@ fun BluetoothDeviceCard(deviceName: String, isConnected: Boolean, isValid: Boole
                 modifier = Modifier
                     .padding(20.dp)
             )
-            if (isConnected) Icon(
+            if (isConnected && isValid) Icon(
                 Icons.Filled.Check,
+                contentDescription = "Connected Icon",
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .padding(15.dp)
+            ) else if (isConnected) Icon(
+                painterResource(id = R.drawable.link_24px),
                 contentDescription = "Connected Icon",
                 modifier = Modifier
                     .align(Alignment.CenterVertically)
@@ -161,24 +175,63 @@ fun BluetoothPage(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-
+    var isDiscovering = remember { mutableStateOf(false) }
+    if (context is MainActivity) {
+        isDiscovering =
+            remember { mutableStateOf(context.bluetoothAdapter?.isDiscovering == true) }
+        LaunchedEffect(context.bluetoothAdapter) {
+            while (true) {
+                isDiscovering.value = context.bluetoothAdapter?.isDiscovering == true
+                delay(1000)
+            }
+        }
+    }
     Box(modifier = modifier.fillMaxSize()) {
-        when (bluetoothStatus.value) {
-            0 -> Text(
-                text = bluetoothText.value,
-                modifier = Modifier.align(Alignment.Center)
-            )
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (isDiscovering.value) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 15.dp)
+                )
 
-            1 -> LazyColumn {
-                items(20) { index ->
-                    BluetoothDeviceCard(
-                        deviceName = "Bluetooth Device #$index",
-                        isConnected = index % 3 == 0,
-                        isValid = index % 5 != 0
+            }
+
+            when (bluetoothStatus.value) {
+                0 -> Text(
+                    text = bluetoothText.value,
+                    modifier = Modifier.fillMaxSize(),
+                    textAlign = TextAlign.Center,
+
                     )
+
+                1 -> LazyColumn {
+                    items(
+                        if (context is MainActivity) {
+                            context.devicesListUi
+                        } else {
+                            mutableListOf(
+                                BluetoothDeviceItem(
+                                    name = "nope",
+                                    isConnected = false,
+                                    isValid = false,
+                                    mac = "00:00:00:00:00:00"
+                                )
+                            )
+                        }
+                    ) { item ->
+                        BluetoothDeviceCard(
+                            deviceName = item.name,
+                            isConnected = item.isConnected,
+                            isValid = item.isValid
+                        )
+                    }
                 }
             }
         }
+
+
+
 
         FloatingActionButton(
             onClick = {
