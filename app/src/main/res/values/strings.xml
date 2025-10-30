@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">TriFeDetect</string>
-    <string name="bt_pair_page_title">蓝牙配对</string>
+    <string name="bt_pair_page_title">蓝牙</string>
+    <string name="loading">读取中</string>
+    <string name="bt_ok">蓝牙已启用, 请稍后</string>
+    <string name="bt_need_permission">需要蓝牙权限\n请点击右下角刷新按钮重试</string>
+    <string name="bt_need_enable">需要启用蓝牙\n请点击右下角刷新按钮重试</string>
+    <string name="bt_not_supported">设备不支持蓝牙</string>
 </resources>
