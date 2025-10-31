@@ -176,7 +176,7 @@ fun BluetoothPage(
 ) {
     val context = LocalContext.current
     var isDiscovering = remember { mutableStateOf(false) }
-    if (context is MainActivity) {
+    if (context is MainActivity && bluetoothStatus.value == 1) {
         isDiscovering =
             remember { mutableStateOf(context.bluetoothAdapter?.isDiscovering == true) }
         LaunchedEffect(context.bluetoothAdapter) {
@@ -229,9 +229,6 @@ fun BluetoothPage(
                 }
             }
         }
-
-
-
 
         FloatingActionButton(
             onClick = {

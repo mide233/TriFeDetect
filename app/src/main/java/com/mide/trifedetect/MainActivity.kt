@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
                         )
                         if (isValid) devicesListUi.add(0, item)
                         else devicesListUi.add(item)
-                        devicesListUi.distinct()
+                        devicesListUi.distinctBy { it.mac }
 
                     }
                 }
@@ -201,28 +201,35 @@ class MainActivity : ComponentActivity() {
         return hasConnectPermission && hasScanPermission
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     fun initBluetoothFlow(requireBluetooth: Boolean = true) {
 
-        if (bluetoothAdapter == null) {
-            bluetoothStatus.value = 0
-            bluetoothText.value = getString(R.string.bt_not_supported)
-            return
-        }
-        if (!bluetoothAdapter!!.isEnabled) {
-            bluetoothStatus.value = 0
-            bluetoothText.value = getString(R.string.bt_need_enable)
-            if (requireBluetooth) {
-                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-                enableBluetoothLauncher?.launch(enableBtIntent)
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            if (bluetoothAdapter == null) {
+                bluetoothStatus.value = 0
+                bluetoothText.value = getString(R.string.bt_not_supported)
+                return
             }
-        } else {
-            bluetoothStatus.value = 1
-            bluetoothText.value = getString(R.string.bt_ok)
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.BLUETOOTH_SCAN
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
+            if (!bluetoothAdapter!!.isEnabled) {
+                bluetoothStatus.value = 0
+                bluetoothText.value = getString(R.string.bt_need_enable)
+
+                if (requireBluetooth) {
+                    val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                    enableBluetoothLauncher?.launch(enableBtIntent)
+                }
+
+            } else {
+                bluetoothStatus.value = 1
+                bluetoothText.value = getString(R.string.bt_ok)
+
                 if (!bluetoothAdapter!!.isDiscovering) {
                     devicesListUi.clear()
 
@@ -240,11 +247,11 @@ class MainActivity : ComponentActivity() {
 
                     bluetoothAdapter!!.startDiscovery()
                 }
-            } else {
-                bluetoothStatus.value = 0
-                bluetoothText.value = getString(R.string.bt_need_permission)
             }
-
+        } else {
+            bluetoothStatus.value = 0
+            bluetoothText.value = getString(R.string.bt_need_permission)
+            checkBluetoothPermission(requireBluetooth)
         }
     }
 
