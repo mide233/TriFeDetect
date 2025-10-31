@@ -4,6 +4,7 @@ import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,6 +13,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,10 +26,14 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getSystemService
 import com.mide.trifedetect.ui.GreetingPreview
 import com.mide.trifedetect.ui.theme.TriFeDetectTheme
+import java.util.UUID
+import kotlin.text.get
+import kotlin.text.set
 
 data class BluetoothDeviceItem(
     val name: String,
@@ -39,13 +45,16 @@ data class BluetoothDeviceItem(
 class MainActivity : ComponentActivity() {
     var bluetoothText: MutableState<String> = mutableStateOf("")
     var bluetoothStatus: MutableState<Int> = mutableIntStateOf(0)
+    var bluetoothManager: BluetoothManager? = null
+    var bluetoothAdapter: BluetoothAdapter? = null
+    var bluetoothSocket: BluetoothSocket? = null
+    var bluetoothThread: Thread? = null
     var enableBluetoothLauncher: ActivityResultLauncher<Intent>? = null
     var permissionLauncher: ActivityResultLauncher<String>? = null
     var devicesListUi = mutableStateListOf<BluetoothDeviceItem>()
-    var bluetoothManager: BluetoothManager? = null
-    var bluetoothAdapter: BluetoothAdapter? = null
-
-
+    var suggestBoxText: MutableState<String> = mutableStateOf("")
+    var bluetoothThreadCtrl: MutableState<Boolean> = mutableStateOf(false)
+    var navPageNum: MutableState<Int> = mutableIntStateOf(0)
     private val btReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
@@ -67,7 +76,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private val btFoundReceiver = object : BroadcastReceiver() {
-
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onReceive(context: Context, intent: Intent) {
             val action: String? = intent.action
@@ -99,16 +107,17 @@ class MainActivity : ComponentActivity() {
                             isValid = isValid,
                             mac = deviceHardwareAddress
                         )
-                        if (isValid) devicesListUi.add(0, item)
-                        else devicesListUi.add(item)
-                        devicesListUi.distinctBy { it.mac }
 
+                        // 检查是否已存在相同设备
+                        if (devicesListUi.none { it.name == deviceName }) {
+                            if (isValid) devicesListUi.add(0, item)
+                            else devicesListUi.add(item)
+                        }
                     }
                 }
             }
         }
     }
-
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     @RequiresApi(Build.VERSION_CODES.S)
@@ -150,7 +159,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TriFeDetectTheme {
-                GreetingPreview(bluetoothText = bluetoothText, bluetoothStatus = bluetoothStatus)
+                GreetingPreview(
+                    bluetoothText = bluetoothText,
+                    bluetoothStatus = bluetoothStatus,
+                    suggestBoxText = suggestBoxText,
+                    bluetoothThreadCtrl = bluetoothThreadCtrl,
+                    navPageNum = navPageNum
+                )
             }
         }
 
@@ -165,11 +180,63 @@ class MainActivity : ComponentActivity() {
             IntentFilter(BluetoothDevice.ACTION_FOUND)
         )
 
+        bluetoothThread = Thread {
+            while (true) {
+                if (!checkBluetoothPermission(false) || bluetoothSocket == null || !bluetoothThreadCtrl.value) {
+                    Log.d(
+                        "EEEEEMainActivity",
+                        "Bluetooth not ready, socket is null: ${bluetoothSocket == null}, ctrl: ${bluetoothThreadCtrl.value}"
+                    )
+                    Thread.sleep(1500)
+                    continue
+                }
+
+                try {
+                    if (!bluetoothSocket!!.isConnected) {
+                        bluetoothSocket!!.connect()
+                    }
+                    val inputStream = bluetoothSocket!!.inputStream
+                    val availableBytes = inputStream.available()
+                    if (availableBytes > 0) {
+                        val buffer = ByteArray(availableBytes)
+                        inputStream.read(buffer)
+
+                        val dataString = String(buffer, Charsets.ISO_8859_1)
+                        runOnUiThread {
+                            suggestBoxText.value += dataString
+                        }
+
+                        Log.d("EEEEEMainActivity", "Received data: $dataString")
+                    }
+
+                    Thread.sleep(500)
+                } catch (e: Exception) {
+                    Log.e("EEEEEMainActivity", "Error reading data", e)
+                    Thread.sleep(2000)
+                }
+
+            }
+        }
+        bluetoothThread?.start()
+
     }
 
     override fun onDestroy() {
         super.onDestroy()
-
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            bluetoothSocket?.close()
+            if (bluetoothAdapter?.isDiscovering == true) {
+                bluetoothAdapter?.cancelDiscovery()
+            }
+        }
+        bluetoothThread?.interrupt()
         unregisterReceiver(btReceiver)
         unregisterReceiver(btFoundReceiver)
     }
@@ -230,21 +297,30 @@ class MainActivity : ComponentActivity() {
                 bluetoothStatus.value = 1
                 bluetoothText.value = getString(R.string.bt_ok)
 
-                if (!bluetoothAdapter!!.isDiscovering) {
+                if (!bluetoothAdapter!!.isDiscovering && requireBluetooth) {
                     devicesListUi.clear()
 
                     val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter?.bondedDevices
                     pairedDevices?.forEach { device ->
-                        devicesListUi.add(
+                        if (device.name.startsWith("JDY"))
+                            devicesListUi.add(
+                                0,
+                                BluetoothDeviceItem(
+                                    name = device.name,
+                                    isConnected = true,
+                                    isValid = true,
+                                    mac = device.address
+                                )
+                            )
+                        else devicesListUi.add(
                             BluetoothDeviceItem(
                                 name = device.name,
                                 isConnected = true,
-                                isValid = device.name.startsWith("JDY"),
+                                isValid = false,
                                 mac = device.address
                             )
                         )
                     }
-
                     bluetoothAdapter!!.startDiscovery()
                 }
             }
@@ -255,4 +331,48 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun connectBluetoothDevice(mac: String) {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            if (bluetoothAdapter?.isDiscovering == true) {
+                bluetoothAdapter?.cancelDiscovery()
+            }
+        }
+
+        Thread {
+            try {
+                val bluetoothTarget = bluetoothAdapter?.getRemoteDevice(mac)
+                val localBluetoothSocket = bluetoothTarget?.createRfcommSocketToServiceRecord(
+                    UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+                )
+
+                localBluetoothSocket?.connect()
+                Log.d("MainActivity", "Successfully connected to device: $mac")
+                
+                bluetoothSocket = localBluetoothSocket
+
+                runOnUiThread {
+                    val deviceIndex = devicesListUi.indexOfFirst { it.mac == mac }
+                    if (deviceIndex != -1) {
+                        devicesListUi[deviceIndex] =
+                            devicesListUi[deviceIndex].copy(isConnected = true)
+                    }
+                    Toast.makeText(applicationContext, "连接成功", Toast.LENGTH_SHORT).show()
+                }
+
+
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Connect to device failed: $mac", e)
+                runOnUiThread {
+                    Toast.makeText(applicationContext, "连接失败", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
 }

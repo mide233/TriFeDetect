@@ -1,6 +1,7 @@
 package com.mide.trifedetect.ui
 
 import android.os.Build
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,6 +39,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -66,12 +69,55 @@ import kotlinx.coroutines.delay
 
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
-fun Greeting(modifier: Modifier = Modifier) {
+fun Greeting(
+    modifier: Modifier = Modifier,
+    suggestBoxText: MutableState<String>,
+    bluetoothThreadCtrl: MutableState<Boolean>,
+    navPageNum: MutableState<Int>
+) {
+    val context = LocalContext.current
     val colorSch = if (isSystemInDarkTheme()) {
-        dynamicDarkColorScheme(LocalContext.current)
+        dynamicDarkColorScheme(context)
     } else {
-        dynamicLightColorScheme(LocalContext.current)
+        dynamicLightColorScheme(context)
     }
+
+    if (context is MainActivity) {
+        if (context.bluetoothSocket == null) {
+            AlertDialog(
+                onDismissRequest = {
+                    // 当用户点击对话框以外的地方或者按下系统返回键将会执行的代码
+                },
+                title = {
+                    Text(
+                        text = "设备未连接",
+                        fontWeight = FontWeight.W700
+                    )
+                },
+                text = {
+                    Text(
+                        text = "请先前往蓝牙设置页面连接设备",
+                        fontSize = 16.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            navPageNum.value = 1
+                        },
+                    ) {
+                        Text(
+                            "确认",
+                            fontWeight = FontWeight.W700,
+
+                            )
+                    }
+                },
+                dismissButton = {}
+            )
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column {
             Column(modifier = Modifier.padding(top = 30.dp, start = 30.dp, end = 30.dp)) {
@@ -95,7 +141,7 @@ fun Greeting(modifier: Modifier = Modifier) {
             ) {
                 val scrollState = rememberScrollState()
                 Text(
-                    text = stringResource(R.string.loading),
+                    text = suggestBoxText.value,
                     modifier = Modifier
                         .padding(10.dp)
                         .verticalScroll(scrollState)
@@ -104,7 +150,14 @@ fun Greeting(modifier: Modifier = Modifier) {
 
         }
         FloatingActionButton(
-            onClick = {},
+            onClick = {
+                if (context is MainActivity) {
+                    if (context.bluetoothThread?.isAlive == true)
+                        bluetoothThreadCtrl.value = !bluetoothThreadCtrl.value
+
+                    if (!bluetoothThreadCtrl.value) context.suggestBoxText.value = ""
+                }
+            },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(horizontal = 20.dp, vertical = 28.dp),
@@ -113,10 +166,17 @@ fun Greeting(modifier: Modifier = Modifier) {
                 8.dp
             )
         ) {
-            Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = "Detection Start/Stop"
-            )
+            if (bluetoothThreadCtrl.value) {
+                Icon(
+                    painterResource(R.drawable.pause_24px),
+                    contentDescription = "Detection Start/Stop"
+                )
+            } else {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Detection Start/Stop"
+                )
+            }
         }
 
 
@@ -125,17 +185,36 @@ fun Greeting(modifier: Modifier = Modifier) {
 
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
-fun BluetoothDeviceCard(deviceName: String, isConnected: Boolean, isValid: Boolean) {
+fun BluetoothDeviceCard(
+    deviceName: String,
+    isConnected: Boolean,
+    isValid: Boolean,
+    deviceMac: String
+) {
+    val context = LocalContext.current
     val colorSch = if (isSystemInDarkTheme()) {
-        dynamicDarkColorScheme(LocalContext.current)
+        dynamicDarkColorScheme(context)
     } else {
-        dynamicLightColorScheme(LocalContext.current)
+        dynamicLightColorScheme(context)
     }
     val cardModifier: Modifier = Modifier
         .fillMaxWidth()
         .padding(bottom = 10.dp, start = 20.dp, end = 20.dp)
+
+    if (isConnected && isValid) {
+        if (context is MainActivity) {
+            if (context.bluetoothSocket == null) {
+                context.connectBluetoothDevice(deviceMac)
+            }
+        }
+    }
+
     Card(
-        modifier = if (isValid) cardModifier.clickable { } else cardModifier,
+        modifier = if (isValid && !isConnected) cardModifier.clickable {
+            if (context is MainActivity) {
+                context.connectBluetoothDevice(deviceMac)
+            }
+        } else cardModifier,
         colors = CardDefaults.cardColors(
             containerColor = if (isValid) colorSch.secondaryContainer else colorSch.surfaceContainer,
         )
@@ -209,21 +288,14 @@ fun BluetoothPage(
                     items(
                         if (context is MainActivity) {
                             context.devicesListUi
-                        } else {
-                            mutableListOf(
-                                BluetoothDeviceItem(
-                                    name = "nope",
-                                    isConnected = false,
-                                    isValid = false,
-                                    mac = "00:00:00:00:00:00"
-                                )
-                            )
-                        }
+                        } else mutableListOf()
+
                     ) { item ->
                         BluetoothDeviceCard(
                             deviceName = item.name,
                             isConnected = item.isConnected,
-                            isValid = item.isValid
+                            isValid = item.isValid,
+                            deviceMac = item.mac
                         )
                     }
                 }
@@ -259,16 +331,19 @@ fun BluetoothPage(
 @Composable
 fun GreetingPreview(
     bluetoothText: MutableState<String> = mutableStateOf(stringResource(R.string.loading)),
-    bluetoothStatus: MutableState<Int> = mutableIntStateOf(0)
+    bluetoothStatus: MutableState<Int> = mutableIntStateOf(0),
+    navPageNum: MutableState<Int> = mutableIntStateOf(0),
+    suggestBoxText: MutableState<String> = mutableStateOf(stringResource(R.string.loading)),
+    bluetoothThreadCtrl: MutableState<Boolean> = mutableStateOf(false)
 ) {
-    var selectedItem by remember { mutableIntStateOf(0) }
+//    var navPageNum by remember { mutableIntStateOf(0) }
     val items = listOf("主页", "蓝牙")
     val icons = listOf(Icons.Filled.Home, Icons.Filled.Settings)
     TriFeDetectTheme {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(items[selectedItem]) },
+                    title = { Text(items[navPageNum.value]) },
                     navigationIcon = {
                     }
                 )
@@ -279,18 +354,21 @@ fun GreetingPreview(
                         NavigationBarItem(
                             icon = { Icon(icons[index], contentDescription = null) },
                             label = { Text(item) },
-                            selected = selectedItem == index,
+                            selected = navPageNum.value == index,
                             onClick = {
-                                selectedItem = index
+                                navPageNum.value = index
                             }
                         )
                     }
                 }
             }
         ) { innerPadding ->
-            when (selectedItem) {
+            when (navPageNum.value) {
                 0 -> Greeting(
-                    modifier = Modifier.padding(innerPadding)
+                    modifier = Modifier.padding(innerPadding),
+                    suggestBoxText = suggestBoxText,
+                    bluetoothThreadCtrl = bluetoothThreadCtrl,
+                    navPageNum = navPageNum
                 )
 
                 1 -> BluetoothPage(
