@@ -59,6 +59,8 @@ class MainActivity : ComponentActivity() {
     var bluetoothSendQueue: ArrayList<Byte> = ArrayList()
     var navPageNum: MutableState<Int> = mutableIntStateOf(0)
     var displayNum: MutableState<String> = mutableStateOf("114.514 μM")
+    var connectedDeviceMac: String? = null
+
     private val btReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
@@ -191,15 +193,25 @@ class MainActivity : ComponentActivity() {
                 BigDecimal(this.toString()).setScale(scale, RoundingMode.HALF_UP).toFloat()
 
             var lastDisplayNum = ""
+            var failureCounter = 0
 
             while (true) {
-                if (!checkBluetoothPermission(false) || bluetoothSocket == null) {
+                if (!checkBluetoothPermission(false)) {
                     Log.d(
                         "EEEEEMainActivity",
                         "Bluetooth Disable, socket is null: ${bluetoothSocket == null}, ctrl: ${bluetoothThreadCtrl.value}"
                     )
                     Thread.sleep(1500)
                     continue
+                } else if (bluetoothSocket == null) {
+                    if (connectedDeviceMac == null) {
+                        Thread.sleep(1500)
+                        continue
+                    } else {
+                        connectBluetoothDevice(connectedDeviceMac!!, suggestFailure = false)
+                        Thread.sleep(2000)
+                        continue
+                    }
                 }
 
                 try {
@@ -216,9 +228,23 @@ class MainActivity : ComponentActivity() {
                         if (extractedData.isNotEmpty()) {
                             for (dataSegment in extractedData) {
                                 if (dataSegment.isEmpty()) continue
+                                val debugData = dataSegment.joinToString(" ") {
+                                    String.format(
+                                        "%02X",
+                                        it
+                                    )
+                                }
                                 bluetoothThreadCtrl.value = dataSegment.removeAt(0) == 0x31.toByte()
                                 val intVal = dataSegment.removeAt(0).toUInt().toInt()
                                 val floatVal = dataSegment.removeAt(0).toUInt().toFloat() / 256.0f
+                                if (intVal > 255 || floatVal >= 1.0f) {
+                                    Log.d(
+                                        "EEEEEMainActivity",
+                                        "invalid data extractedData from buffer: $debugData"
+                                    )
+                                    continue
+
+                                }
                                 displayNum.value =
                                     String.format(
                                         "%03d.%02d μM",
@@ -242,6 +268,13 @@ class MainActivity : ComponentActivity() {
                                 } ${displayNum.value}\n"
                             }
                             lastDisplayNum = displayNum.value
+                        }
+                    } else {
+                        Log.d("EEEEEMainActivity", "No data available to read")
+                        failureCounter++
+                        if (failureCounter >= 5) {
+                            bluetoothSocket = null
+                            failureCounter = 0
                         }
                     }
 
@@ -271,6 +304,7 @@ class MainActivity : ComponentActivity() {
                     Thread.sleep(500)
                 } catch (e: Exception) {
                     Log.e("EEEEEMainActivity", "Error reading data", e)
+                    bluetoothSocket = null
                     Thread.sleep(2000)
                 }
 
@@ -412,7 +446,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun connectBluetoothDevice(mac: String) {
+    fun connectBluetoothDevice(
+        mac: String,
+        suggestSuccess: Boolean = true,
+        suggestFailure: Boolean = true
+    ) {
         if (ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.BLUETOOTH_CONNECT
@@ -444,14 +482,22 @@ class MainActivity : ComponentActivity() {
                         devicesListUi[deviceIndex] =
                             devicesListUi[deviceIndex].copy(isConnected = true)
                     }
-                    Toast.makeText(applicationContext, "连接成功", Toast.LENGTH_SHORT).show()
+                    if (suggestSuccess) Toast.makeText(
+                        applicationContext,
+                        "连接成功",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
 
 
             } catch (e: Exception) {
                 Log.e("MainActivity", "Connect to device failed: $mac", e)
                 runOnUiThread {
-                    Toast.makeText(applicationContext, "连接失败", Toast.LENGTH_SHORT).show()
+                    if (suggestFailure) Toast.makeText(
+                        applicationContext,
+                        "连接失败",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }.start()

@@ -155,7 +155,7 @@ fun Greeting(
                         context.bluetoothSendQueue.addAll(
                             bytes(
                                 0x39, bluetoothThreadCtrl.value.toInt(),
-                                0x0D, 0x0A
+                                0x0D
                             )
                         )
                     }
@@ -209,7 +209,7 @@ fun BluetoothDeviceCard(
     if (isConnected && isValid) {
         if (context is MainActivity) {
             if (context.bluetoothSocket == null) {
-                context.connectBluetoothDevice(deviceMac)
+                context.connectedDeviceMac = deviceMac
             }
         }
     }
@@ -217,7 +217,7 @@ fun BluetoothDeviceCard(
     Card(
         modifier = if (isValid && !isConnected) cardModifier.clickable {
             if (context is MainActivity) {
-                context.connectBluetoothDevice(deviceMac)
+                context.connectedDeviceMac = deviceMac
             }
         } else cardModifier,
         colors = CardDefaults.cardColors(
