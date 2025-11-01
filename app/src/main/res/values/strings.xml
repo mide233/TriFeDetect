@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">TriFeDetect</string>
+    <string name="app_name">FerroSense</string>
     <string name="bt_pair_page_title">蓝牙</string>
     <string name="loading">读取中</string>
     <string name="bt_ok">蓝牙已启用, 请稍后</string>

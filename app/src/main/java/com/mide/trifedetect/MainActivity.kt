@@ -1,6 +1,7 @@
 package com.mide.trifedetect
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
@@ -26,14 +27,15 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.getSystemService
 import com.mide.trifedetect.ui.GreetingPreview
 import com.mide.trifedetect.ui.theme.TriFeDetectTheme
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.UUID
-import kotlin.text.get
-import kotlin.text.set
 
 data class BluetoothDeviceItem(
     val name: String,
@@ -54,7 +56,9 @@ class MainActivity : ComponentActivity() {
     var devicesListUi = mutableStateListOf<BluetoothDeviceItem>()
     var suggestBoxText: MutableState<String> = mutableStateOf("")
     var bluetoothThreadCtrl: MutableState<Boolean> = mutableStateOf(false)
+    var bluetoothSendQueue: ArrayList<Byte> = ArrayList()
     var navPageNum: MutableState<Int> = mutableIntStateOf(0)
+    var displayNum: MutableState<String> = mutableStateOf("114.514 μM")
     private val btReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
@@ -119,6 +123,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @SuppressLint("DefaultLocale", "SimpleDateFormat")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     @RequiresApi(Build.VERSION_CODES.S)
     @OptIn(ExperimentalMaterial3Api::class)
@@ -164,7 +169,8 @@ class MainActivity : ComponentActivity() {
                     bluetoothStatus = bluetoothStatus,
                     suggestBoxText = suggestBoxText,
                     bluetoothThreadCtrl = bluetoothThreadCtrl,
-                    navPageNum = navPageNum
+                    navPageNum = navPageNum,
+                    displayNum = displayNum
                 )
             }
         }
@@ -181,11 +187,16 @@ class MainActivity : ComponentActivity() {
         )
 
         bluetoothThread = Thread {
+            fun Float.roundHalfUp(scale: Int): Float =
+                BigDecimal(this.toString()).setScale(scale, RoundingMode.HALF_UP).toFloat()
+
+            var lastDisplayNum = ""
+
             while (true) {
-                if (!checkBluetoothPermission(false) || bluetoothSocket == null || !bluetoothThreadCtrl.value) {
+                if (!checkBluetoothPermission(false) || bluetoothSocket == null) {
                     Log.d(
                         "EEEEEMainActivity",
-                        "Bluetooth not ready, socket is null: ${bluetoothSocket == null}, ctrl: ${bluetoothThreadCtrl.value}"
+                        "Bluetooth Disable, socket is null: ${bluetoothSocket == null}, ctrl: ${bluetoothThreadCtrl.value}"
                     )
                     Thread.sleep(1500)
                     continue
@@ -201,12 +212,60 @@ class MainActivity : ComponentActivity() {
                         val buffer = ByteArray(availableBytes)
                         inputStream.read(buffer)
 
-                        val dataString = String(buffer, Charsets.ISO_8859_1)
-                        runOnUiThread {
-                            suggestBoxText.value += dataString
+                        val extractedData = extractBetweenCRLF(buffer)
+                        if (extractedData.isNotEmpty()) {
+                            for (dataSegment in extractedData) {
+                                if (dataSegment.isEmpty()) continue
+                                bluetoothThreadCtrl.value = dataSegment.removeAt(0) == 0x31.toByte()
+                                val intVal = dataSegment.removeAt(0).toUInt().toInt()
+                                val floatVal = dataSegment.removeAt(0).toUInt().toFloat() / 256.0f
+                                displayNum.value =
+                                    String.format(
+                                        "%03d.%02d μM",
+                                        intVal,
+                                        (floatVal.roundHalfUp(2) * 100).toInt()
+                                    )
+
+                                Log.d(
+                                    "EEEEEMainActivity",
+                                    "extractedData data display: ${displayNum.value}"
+                                )
+                            }
                         }
 
-                        Log.d("EEEEEMainActivity", "Received data: $dataString")
+                        if (bluetoothThreadCtrl.value && displayNum.value != lastDisplayNum) {
+                            runOnUiThread {
+                                suggestBoxText.value += "${
+                                    SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(
+                                        Date()
+                                    )
+                                } ${displayNum.value}\n"
+                            }
+                            lastDisplayNum = displayNum.value
+                        }
+                    }
+
+                    if (bluetoothSendQueue.isNotEmpty()) {
+                        if (!bluetoothSocket!!.isConnected) {
+                            bluetoothSocket!!.connect()
+                        }
+                        val outputStream = bluetoothSocket!!.outputStream
+                        val byteArray = bluetoothSendQueue.toByteArray()
+                        outputStream.write(byteArray)
+                        outputStream.flush()
+                        bluetoothSendQueue.clear()
+                        Log.d(
+                            "EEEEEMainActivity",
+                            "Sent data: ${
+                                byteArray.joinToString(" ") {
+                                    String.format(
+                                        "%02X",
+                                        it
+                                    )
+                                }
+                            }"
+                        )
+
                     }
 
                     Thread.sleep(500)
@@ -239,6 +298,28 @@ class MainActivity : ComponentActivity() {
         bluetoothThread?.interrupt()
         unregisterReceiver(btReceiver)
         unregisterReceiver(btFoundReceiver)
+    }
+
+    fun extractBetweenCRLF(data: ByteArray): List<ArrayList<Byte>> {
+        val results = ArrayList<ArrayList<Byte>>()
+        var i = 0
+        while (i < data.size) {
+            if (data[i] == 0x0D.toByte()) {
+                var j = i + 1
+                while (j < data.size && data[j] != 0x0A.toByte()) j++
+                if (j < data.size && data[j] == 0x0A.toByte()) {
+                    val segment = ArrayList<Byte>(j - (i + 1))
+                    for (k in (i + 1) until j) segment.add(data[k])
+                    results.add(segment)
+                    i = j + 1
+                    continue
+                } else {
+                    break
+                }
+            }
+            i++
+        }
+        return results
     }
 
     @RequiresApi(Build.VERSION_CODES.S)
@@ -354,7 +435,7 @@ class MainActivity : ComponentActivity() {
 
                 localBluetoothSocket?.connect()
                 Log.d("MainActivity", "Successfully connected to device: $mac")
-                
+
                 bluetoothSocket = localBluetoothSocket
 
                 runOnUiThread {
