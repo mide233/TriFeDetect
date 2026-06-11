@@ -1,6 +1,7 @@
 package com.mide.trifedetect.ui
 
 import android.os.Build
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -87,13 +89,13 @@ fun Greeting(
                 },
                 title = {
                     Text(
-                        text = "设备未连接",
+                        text = stringResource(R.string.disconnect),
                         fontWeight = FontWeight.W700
                     )
                 },
                 text = {
                     Text(
-                        text = "请先前往蓝牙设置页面连接设备",
+                        text = stringResource(R.string.go_connect_first),
                         fontSize = 16.sp
                     )
                 },
@@ -104,7 +106,7 @@ fun Greeting(
                         },
                     ) {
                         Text(
-                            "确认",
+                            text = stringResource(R.string.confirm),
                             fontWeight = FontWeight.W700,
 
                             )
@@ -118,7 +120,7 @@ fun Greeting(
     Box(modifier = modifier.fillMaxSize()) {
         Column {
             Column(modifier = Modifier.padding(top = 30.dp, start = 30.dp, end = 30.dp)) {
-                Text(text = "三价铁浓度")
+                Text(text = stringResource(R.string.tri_fe_ppm))
                 Text(
                     text = displayNum.value,
                     textAlign = TextAlign.Center,
@@ -152,6 +154,11 @@ fun Greeting(
                 if (context is MainActivity) {
                     if (context.bluetoothThread?.isAlive == true) {
                         bluetoothThreadCtrl.value = !bluetoothThreadCtrl.value
+                        if (bluetoothThreadCtrl.value) Toast.makeText(
+                            context,
+                            context.getString(R.string.try_again),
+                            Toast.LENGTH_SHORT
+                        ).show()
                         context.bluetoothSendQueue.addAll(
                             bytes(
                                 0x39, bluetoothThreadCtrl.value.toInt(),
@@ -159,8 +166,6 @@ fun Greeting(
                             )
                         )
                     }
-
-                    if (!bluetoothThreadCtrl.value) context.suggestBoxText.value = ""
                 }
             },
             modifier = Modifier
@@ -340,7 +345,7 @@ fun GreetingPreview(
     navPageNum: MutableState<Int> = mutableIntStateOf(0),
     suggestBoxText: MutableState<String> = mutableStateOf(stringResource(R.string.loading)),
     bluetoothThreadCtrl: MutableState<Boolean> = mutableStateOf(false),
-    displayNum: MutableState<String> = mutableStateOf("114.514 ppm")
+    displayNum: MutableState<String> = mutableStateOf("Loading...")
 ) {
     val context = LocalContext.current
     val bluetoothConnectStatus = remember { mutableStateOf(false) }
@@ -353,8 +358,16 @@ fun GreetingPreview(
             }
         }
 
-    val items = listOf("主页", "蓝牙")
-    val icons = listOf(Icons.Filled.Home, Icons.Filled.Settings)
+    val items = listOf(
+        stringResource(R.string.main_page),
+        stringResource(R.string.bt_page),
+        stringResource(R.string.setting_page)
+    )
+    val icons = listOf<@Composable () -> Unit>(
+        { Icon(Icons.Filled.Home, contentDescription = null) },
+        { Icon(painterResource(R.drawable.bluetooth_24px), contentDescription = null) },
+        { Icon(Icons.Filled.Settings, contentDescription = null) }
+    )
     TriFeDetectTheme {
         Scaffold(
             topBar = {
@@ -362,7 +375,9 @@ fun GreetingPreview(
                     title = {
                         Text(
                             items[navPageNum.value] +
-                                    if (bluetoothConnectStatus.value && navPageNum.value == 0) " - 已连接" else ""
+                                    if (bluetoothConnectStatus.value && navPageNum.value == 0) " - " + stringResource(
+                                        R.string.connected
+                                    ) else ""
                         )
                     },
                     navigationIcon = {
@@ -373,7 +388,7 @@ fun GreetingPreview(
                 NavigationBar(windowInsets = NavigationBarDefaults.windowInsets) {
                     items.forEachIndexed { index, item ->
                         NavigationBarItem(
-                            icon = { Icon(icons[index], contentDescription = null) },
+                            icon = { icons[index]() },
                             label = { Text(item) },
                             selected = navPageNum.value == index,
                             onClick = {
@@ -398,6 +413,8 @@ fun GreetingPreview(
                     bluetoothStatus = bluetoothStatus,
                     modifier = Modifier.padding(innerPadding)
                 )
+
+
             }
         }
     }

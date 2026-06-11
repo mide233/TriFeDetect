@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
     var bluetoothThreadCtrl: MutableState<Boolean> = mutableStateOf(false)
     var bluetoothSendQueue: ArrayList<Byte> = ArrayList()
     var navPageNum: MutableState<Int> = mutableIntStateOf(0)
-    var displayNum: MutableState<String> = mutableStateOf("114.514 μM")
+    var displayNum: MutableState<String> = mutableStateOf("Loading...")
     var connectedDeviceMac: String? = null
 
     private val btReceiver = object : BroadcastReceiver() {
@@ -234,13 +234,15 @@ class MainActivity : ComponentActivity() {
                                         it
                                     )
                                 }
+                                Log.d("EEEEEMainActivity", "rec data: $debugData")
+
                                 bluetoothThreadCtrl.value = dataSegment.removeAt(0) == 0x31.toByte()
                                 val intVal = dataSegment.removeAt(0).toUInt().toInt()
-                                val floatVal = dataSegment.removeAt(0).toUInt().toFloat() / 256.0f
+                                val floatVal = dataSegment.removeAt(0).toUByte().toFloat() / 256.0f
                                 if (intVal > 255 || floatVal >= 1.0f) {
                                     Log.d(
                                         "EEEEEMainActivity",
-                                        "invalid data extractedData from buffer: $debugData"
+                                        "invalid data extractedData from buffer: $debugData, got intVal: $intVal, floatVal: $floatVal"
                                     )
                                     continue
 
@@ -252,10 +254,6 @@ class MainActivity : ComponentActivity() {
                                         (floatVal.roundHalfUp(2) * 100).toInt()
                                     )
 
-                                Log.d(
-                                    "EEEEEMainActivity",
-                                    "extractedData data display: ${displayNum.value}"
-                                )
                             }
                         }
 
@@ -484,7 +482,7 @@ class MainActivity : ComponentActivity() {
                     }
                     if (suggestSuccess) Toast.makeText(
                         applicationContext,
-                        "连接成功",
+                        getString(R.string.connect_success),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -495,7 +493,7 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread {
                     if (suggestFailure) Toast.makeText(
                         applicationContext,
-                        "连接失败",
+                        getString(R.string.connect_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
