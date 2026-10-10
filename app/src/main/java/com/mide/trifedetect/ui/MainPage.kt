@@ -17,16 +17,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -72,6 +76,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -139,14 +144,31 @@ fun Greeting(
             }
             Column(modifier = Modifier.padding(top = 20.dp, start = 30.dp, end = 30.dp)) {
                 Text(text = stringResource(R.string.tri_fe_ppm))
-                Text(
-                    text = displayNum.value,
-                    textAlign = TextAlign.Center,
-                    fontSize = 50.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colorSch.primary,
-                    softWrap = false
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = displayNum.value,
+                        textAlign = TextAlign.Center,
+                        fontSize = 50.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colorSch.primary,
+                        softWrap = false
+                    )
+                    val trend = ctx?.resultTrend() ?: 0
+                    if (trend != 0) {
+                        Icon(
+                            imageVector = if (trend > 0) Icons.Filled.KeyboardArrowUp
+                            else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = stringResource(
+                                if (trend > 0) R.string.result_above_range
+                                else R.string.result_below_range
+                            ),
+                            tint = if (trend > 0) colorSch.error else colorSch.tertiary,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .size(38.dp)
+                        )
+                    }
+                }
                 if (ctx != null) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -583,6 +605,36 @@ fun FormulaPage(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.result_range_label),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.W600
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedTextField(
+                value = ctx?.resultMin?.value ?: "",
+                onValueChange = { ctx?.setResultMin(it) },
+                label = { Text(stringResource(R.string.result_min_label)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = ctx?.resultMax?.value ?: "",
+                onValueChange = { ctx?.setResultMax(it) },
+                label = { Text(stringResource(R.string.result_max_label)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -594,7 +646,47 @@ fun FormulaPage(modifier: Modifier = Modifier) {
                 onCheckedChange = { ctx?.setShowLog(it) }
             )
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = stringResource(R.string.language_label), fontSize = 16.sp)
+            LanguageSelector(
+                current = ctx?.language?.value ?: "",
+                onSelect = { ctx?.setAppLanguage(it) }
+            )
+        }
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/** 语言选择下拉框: "" = 跟随系统, "en" = English, "zh" = 中文 */
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+private fun LanguageSelector(current: String, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = listOf(
+        "" to R.string.lang_system,
+        "en" to R.string.lang_english,
+        "zh" to R.string.lang_chinese
+    )
+    val currentLabel = options.firstOrNull { it.first == current }?.second ?: R.string.lang_system
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(text = stringResource(currentLabel))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (tag, res) ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(res)) },
+                    onClick = { expanded = false; onSelect(tag) }
+                )
+            }
+        }
     }
 }
 
@@ -835,6 +927,17 @@ fun GreetingPreview(
 ) {
     val context = LocalContext.current
     val bluetoothConnectStatus = remember { mutableStateOf(false) }
+
+    // 语言切换: 等下拉菜单弹窗关闭后再重建 Activity, 避免窗口令牌失效导致崩溃
+    if (context is MainActivity) {
+        val activeLang = context.language.value
+        LaunchedEffect(activeLang) {
+            if (context.needsLanguageRecreate()) {
+                delay(50)
+                context.recreate()
+            }
+        }
+    }
 
     if (context is MainActivity)
         LaunchedEffect(context.bluetoothSocket) {

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FerroSense</string>
+    <string name="bt_pair_page_title">蓝牙</string>
+    <string name="loading">加载中</string>
+    <string name="bt_ok">蓝牙已开启，请稍候</string>
+    <string name="bt_need_permission">需要蓝牙权限\n请点击右下角刷新按钮重试</string>
+    <string name="bt_need_enable">需要开启蓝牙\n请点击右下角刷新按钮重试</string>
+    <string name="bt_not_supported">设备不支持蓝牙</string>
+    <string name="connect_failed">连接失败</string>
+    <string name="connect_success">连接成功</string>
+    <string name="disconnect">设备未连接</string>
+    <string name="go_connect_first">请先前往蓝牙设置页连接设备</string>
+    <string name="confirm">确认</string>
+    <string name="tri_fe_ppm">三价铁浓度</string>
+    <string name="try_again">若检测尚未开始，请再次点击</string>
+    <string name="main_page">主页</string>
+    <string name="bt_page">蓝牙</string>
+    <string name="connected">已连接</string>
+    <string name="setting_page">设置</string>
+
+    <!-- Work status / errors -->
+    <string name="status_label">状态</string>
+    <string name="status_unknown">未知</string>
+    <string name="status_ready">就绪</string>
+    <string name="status_calibrating">校准中…</string>
+    <string name="status_working">检测中…</string>
+    <string name="err_tilt">设备倾斜，请保持水平</string>
+    <string name="err_open">上盖已打开或未密封</string>
+    <string name="err_low_power">电量不足</string>
+    <string name="err_no_container">未检测到容器</string>
+
+    <!-- Home page -->
+    <string name="battery_label">电量</string>
+    <string name="device_label">设备</string>
+    <string name="no_device">无</string>
+    <string name="btn_calibrate">校准</string>
+    <string name="btn_refresh_status">刷新状态</string>
+    <string name="calibration_label">校准</string>
+    <string name="raw_value_label">原始值</string>
+    <string name="cal_saved">校准已保存</string>
+
+    <!-- Bluetooth page -->
+    <string name="btn_connect">连接</string>
+    <string name="btn_disconnect">断开</string>
+    <string name="bt_disconnected">已断开连接</string>
+
+    <!-- Formula editor -->
+    <string name="formula_heading">公式编辑器</string>
+    <string name="formula_preview">表达式</string>
+    <string name="formula_test">测试</string>
+    <string name="formula_save">保存</string>
+    <string name="formula_reset">重置</string>
+    <string name="formula_saved">公式已保存</string>
+    <string name="formula_invalid">公式无效：%1$s</string>
+    <string name="formula_change_type">类型</string>
+    <string name="formula_type_number">数字</string>
+    <string name="formula_type_variable">变量</string>
+    <string name="formula_type_operator">运算符</string>
+    <string name="formula_type_function">函数</string>
+
+    <!-- Progress / calibration state -->
+    <string name="progress_label">进度</string>
+    <string name="cal_status_saved">已存储</string>
+    <string name="cal_status_none">未存储</string>
+    <string name="btn_clear_calibration">清除校准</string>
+    <string name="cal_cleared">校准已清除</string>
+    <string name="err_cannot_run">无法开始：设备处于错误状态（%1$s）</string>
+    <string name="show_log">显示日志</string>
+    <string name="bt_empty_hint">未找到设备。\n点击刷新按钮搜索。</string>
+
+    <!-- Output range -->
+    <string name="result_range_label">输出范围</string>
+    <string name="result_min_label">最小值</string>
+    <string name="result_max_label">最大值</string>
+    <string name="result_above_range">超出范围上限</string>
+    <string name="result_below_range">低于范围下限</string>
+
+    <!-- Language -->
+    <string name="language_label">语言</string>
+    <string name="lang_system">跟随系统</string>
+    <string name="lang_english">English</string>
+    <string name="lang_chinese">中文</string>
+</resources>

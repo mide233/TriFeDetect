@@ -67,4 +67,17 @@
     <string name="err_cannot_run">Cannot start: device is in error state (%1$s)</string>
     <string name="show_log">Show log</string>
     <string name="bt_empty_hint">No devices found.\nTap the refresh button to search.</string>
+
+    <!-- Output range -->
+    <string name="result_range_label">Output range</string>
+    <string name="result_min_label">Min</string>
+    <string name="result_max_label">Max</string>
+    <string name="result_above_range">Above range</string>
+    <string name="result_below_range">Below range</string>
+
+    <!-- Language -->
+    <string name="language_label">Language</string>
+    <string name="lang_system">System</string>
+    <string name="lang_english">English</string>
+    <string name="lang_chinese">中文</string>
 </resources>

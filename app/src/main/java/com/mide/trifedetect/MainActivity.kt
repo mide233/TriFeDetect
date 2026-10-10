@@ -2,6 +2,7 @@ package com.mide.trifedetect
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.LocaleManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
@@ -11,8 +12,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.LocaleList
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -36,6 +39,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 data class BluetoothDeviceItem(
@@ -54,6 +58,9 @@ class MainActivity : ComponentActivity() {
         const val STATUS_POLL_MS = 1000L
         const val PREF_NAME = "trifedetect"
         const val KEY_SHOW_LOG = "show_log"
+        const val KEY_RESULT_MIN = "result_min"
+        const val KEY_RESULT_MAX = "result_max"
+        const val KEY_LANGUAGE = "language"
     }
 
     var bluetoothText: MutableState<String> = mutableStateOf("")
@@ -88,6 +95,13 @@ class MainActivity : ComponentActivity() {
     var calibrationValue: MutableState<Double> = mutableDoubleStateOf(0.0)
     var calibrationUv: MutableState<Int> = mutableIntStateOf(0)
 
+    /** 最近一次采集的输出值 (公式结果; NaN = 无) */
+    var resultValue: MutableState<Double> = mutableDoubleStateOf(Double.NaN)
+
+    /** 输出值允许范围 (文本, 空 = 不限制) */
+    var resultMin: MutableState<String> = mutableStateOf("")
+    var resultMax: MutableState<String> = mutableStateOf("")
+
     /** 当前设备是否已存储校准值 */
     var hasCalibration: MutableState<Boolean> = mutableStateOf(false)
 
@@ -96,6 +110,12 @@ class MainActivity : ComponentActivity() {
 
     /** 是否在主页显示日志框 (默认关) */
     var showLog: MutableState<Boolean> = mutableStateOf(false)
+
+    /** 应用语言标签 ("" = 跟随系统) */
+    var language: MutableState<String> = mutableStateOf("")
+
+    /** 当前已应用的语言标签, 用于判断是否需要重建 Activity */
+    private var appliedLanguageTag: String = ""
 
     private lateinit var formulaStore: FormulaStore
     private val frameParser = TriFeProtocol.FrameParser()
@@ -159,6 +179,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        val tag = newBase.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+            .getString(KEY_LANGUAGE, "") ?: ""
+        appliedLanguageTag = tag
+        if (tag.isEmpty()) {
+            super.attachBaseContext(newBase)
+        } else {
+            val locale = Locale.forLanguageTag(tag)
+            Locale.setDefault(locale)
+            val config = Configuration(newBase.resources.configuration)
+            config.setLocale(locale)
+            super.attachBaseContext(newBase.createConfigurationContext(config))
+        }
+    }
+
     @SuppressLint("DefaultLocale", "SimpleDateFormat")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     @RequiresApi(Build.VERSION_CODES.S)
@@ -171,6 +206,11 @@ class MainActivity : ComponentActivity() {
         formulaText = mutableStateOf(formulaStore.getFormula())
         showLog.value = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
             .getBoolean(KEY_SHOW_LOG, false)
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).let { prefs ->
+            resultMin.value = prefs.getString(KEY_RESULT_MIN, "") ?: ""
+            resultMax.value = prefs.getString(KEY_RESULT_MAX, "") ?: ""
+            language.value = prefs.getString(KEY_LANGUAGE, "") ?: ""
+        }
 
         bluetoothText = mutableStateOf(getString(R.string.loading))
 
@@ -227,60 +267,66 @@ class MainActivity : ComponentActivity() {
         bluetoothThread = Thread {
             var failureCounter = 0
 
-            while (true) {
-                if (!checkBluetoothPermission(false)) {
-                    Thread.sleep(1500)
-                    continue
-                } else if (bluetoothSocket == null) {
-                    if (connectedDeviceMac == null) {
+            try {
+                while (!Thread.currentThread().isInterrupted) {
+                    if (!checkBluetoothPermission(false)) {
                         Thread.sleep(1500)
                         continue
-                    } else {
-                        connectBluetoothDevice(connectedDeviceMac!!, suggestFailure = false)
-                        Thread.sleep(2000)
-                        continue
-                    }
-                }
-
-                try {
-                    if (!bluetoothSocket!!.isConnected) {
-                        bluetoothSocket!!.connect()
-                    }
-                    val inputStream = bluetoothSocket!!.inputStream
-                    val availableBytes = inputStream.available()
-                    if (availableBytes > 0) {
-                        val buffer = ByteArray(availableBytes)
-                        inputStream.read(buffer)
-
-                        val frames = ArrayList<TriFeProtocol.Frame>()
-                        frameParser.feed(buffer, buffer.size, frames)
-                        for (frame in frames) handleDeviceFrame(frame)
-                        failureCounter = 0
-                    } else {
-                        failureCounter++
-                        if (failureCounter >= 5) {
-                            bluetoothSocket = null
-                            activeMac.value = ""
-                            failureCounter = 0
+                    } else if (bluetoothSocket == null) {
+                        if (connectedDeviceMac == null) {
+                            Thread.sleep(1500)
+                            continue
+                        } else {
+                            connectBluetoothDevice(connectedDeviceMac!!, suggestFailure = false)
+                            Thread.sleep(2000)
+                            continue
                         }
                     }
 
-                    // 定期查询状态, 刷新进度/电量/工作状态
-                    val now = System.currentTimeMillis()
-                    if (now - lastStatusQueryMs >= STATUS_POLL_MS) {
-                        lastStatusQueryMs = now
-                        enqueueFrame(TriFeProtocol.buildFrame(TriFeProtocol.HostCmd.STATUS_QUERY))
+                    try {
+                        if (!bluetoothSocket!!.isConnected) {
+                            bluetoothSocket!!.connect()
+                        }
+                        val inputStream = bluetoothSocket!!.inputStream
+                        val availableBytes = inputStream.available()
+                        if (availableBytes > 0) {
+                            val buffer = ByteArray(availableBytes)
+                            inputStream.read(buffer)
+
+                            val frames = ArrayList<TriFeProtocol.Frame>()
+                            frameParser.feed(buffer, buffer.size, frames)
+                            for (frame in frames) handleDeviceFrame(frame)
+                            failureCounter = 0
+                        } else {
+                            failureCounter++
+                            if (failureCounter >= 5) {
+                                bluetoothSocket = null
+                                activeMac.value = ""
+                                failureCounter = 0
+                            }
+                        }
+
+                        // 定期查询状态, 刷新进度/电量/工作状态
+                        val now = System.currentTimeMillis()
+                        if (now - lastStatusQueryMs >= STATUS_POLL_MS) {
+                            lastStatusQueryMs = now
+                            enqueueFrame(TriFeProtocol.buildFrame(TriFeProtocol.HostCmd.STATUS_QUERY))
+                        }
+
+                        sendPendingFrames()
+
+                        Thread.sleep(500)
+                    } catch (e: InterruptedException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in bluetooth loop", e)
+                        bluetoothSocket = null
+                        activeMac.value = ""
+                        Thread.sleep(2000)
                     }
-
-                    sendPendingFrames()
-
-                    Thread.sleep(500)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in bluetooth loop", e)
-                    bluetoothSocket = null
-                    activeMac.value = ""
-                    Thread.sleep(2000)
                 }
+            } catch (_: InterruptedException) {
+                // Activity 销毁/重建时中断读线程, 静默退出 (避免未捕获异常导致崩溃)
             }
         }
         bluetoothThread?.start()
@@ -424,6 +470,7 @@ class MainActivity : ComponentActivity() {
         rawResult.value = raw
         val cal = calibrationValue.value
         val out = runCatching { Formula.eval(formulaText.value, cal, raw) }.getOrNull()
+        resultValue.value = if (out == null || out.isNaN() || out.isInfinite()) Double.NaN else out
         displayNum.value = if (out == null || out.isNaN() || out.isInfinite()) "—" else formatValue(out)
         runOnUiThread {
             logLine("采集结果 val=${formatValue(raw)}  cal=${formatValue(cal)}  →  ${displayNum.value}")
@@ -452,6 +499,58 @@ class MainActivity : ComponentActivity() {
         showLog.value = v
         getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
             .putBoolean(KEY_SHOW_LOG, v).apply()
+    }
+
+    /** 设置应用语言 (tag = "" 表示跟随系统) */
+    fun setAppLanguage(tag: String) {
+        if (tag == language.value) return
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+            .putString(KEY_LANGUAGE, tag).apply()
+        language.value = tag
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ 使用系统"按应用语言": 由系统以配置变更方式重建 Activity,
+            // 可正确保留沉浸式状态栏 (手动 recreate() 在部分 ROM 上会丢失 edge-to-edge)
+            val locales = if (tag.isEmpty()) LocaleList.getEmptyLocaleList()
+            else LocaleList.forLanguageTags(tag)
+            getSystemService(LocaleManager::class.java).applicationLocales = locales
+        }
+    }
+
+    /** 语言已改变但尚未应用到当前配置时返回 true (供 Compose 触发重建) */
+    fun needsLanguageRecreate(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU &&
+            language.value != appliedLanguageTag
+
+    /** 更新输出值下限并持久化 */
+    fun setResultMin(v: String) {
+        resultMin.value = v
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+            .putString(KEY_RESULT_MIN, v).apply()
+    }
+
+    /** 更新输出值上限并持久化 */
+    fun setResultMax(v: String) {
+        resultMax.value = v
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+            .putString(KEY_RESULT_MAX, v).apply()
+    }
+
+    private fun rangeMin(): Double? = resultMin.value.trim().toDoubleOrNull()
+
+    private fun rangeMax(): Double? = resultMax.value.trim().toDoubleOrNull()
+
+    /**
+     * 输出值相对设定范围的位置:
+     *  1 = 高于上限, -1 = 低于下限, 0 = 在范围内 / 未设置 / 无结果
+     */
+    fun resultTrend(): Int {
+        val v = resultValue.value
+        if (v.isNaN() || v.isInfinite()) return 0
+        val max = rangeMax()
+        if (max != null && v > max) return 1
+        val min = rangeMin()
+        if (min != null && v < min) return -1
+        return 0
     }
 
     /** 清除当前设备已存储的校准值, 并复位为 0 */
