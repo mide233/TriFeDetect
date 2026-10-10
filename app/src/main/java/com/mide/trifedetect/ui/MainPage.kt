@@ -3,16 +3,21 @@ package com.mide.trifedetect.ui
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -60,6 +65,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -155,6 +161,29 @@ fun Greeting(
                             fontSize = 14.sp
                         )
                     }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.calibration_label) + ": " +
+                                    stringResource(
+                                        if (ctx.hasCalibration.value) R.string.cal_status_saved
+                                        else R.string.cal_status_none
+                                    ),
+                            fontSize = 14.sp,
+                            color = colorSch.primary
+                        )
+                        if (ctx.hasCalibration.value) {
+                            OutlinedButton(
+                                onClick = { ctx.clearCalibration() },
+                                enabled = ctx.bluetoothSocket != null
+                            ) {
+                                Text(text = stringResource(R.string.btn_clear_calibration))
+                            }
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
@@ -232,8 +261,12 @@ fun StatusCard(ctx: MainActivity) {
         dynamicLightColorScheme(ctx)
     }
     val isErr = ctx.lastError.value.isNotEmpty()
-    val stateText = ctx.currentWorkState()?.let { ctx.workStateMessage(it) }
+    val state = ctx.currentWorkState()
+    val stateText = state?.let { ctx.workStateMessage(it) }
         ?: stringResource(R.string.status_unknown)
+    val running = state == TriFeProtocol.WorkState.CALIBRATION ||
+            state == TriFeProtocol.WorkState.WORKING
+    val shownProgress = if (running) ctx.progress.value.coerceIn(0, 100) else 0
 
     Card(
         modifier = Modifier
@@ -248,10 +281,16 @@ fun StatusCard(ctx: MainActivity) {
                 text = stringResource(R.string.status_label) + ": " + stateText,
                 fontWeight = FontWeight.W600
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.progress_label) + ": $shownProgress%",
+                fontSize = 13.sp
+            )
             Spacer(modifier = Modifier.height(6.dp))
             LinearProgressIndicator(
-                progress = { (ctx.progress.value.coerceIn(0, 100)) / 100f },
-                modifier = Modifier.fillMaxWidth()
+                progress = { shownProgress / 100f },
+                modifier = Modifier.fillMaxWidth(),
+                drawStopIndicator = {}
             )
             Spacer(modifier = Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -518,10 +557,19 @@ fun NodeEditor(
     onChange: (FNode) -> Unit,
     onDelete: (() -> Unit)?
 ) {
+    val colorSch = if (isSystemInDarkTheme()) {
+        dynamicDarkColorScheme(LocalContext.current)
+    } else {
+        dynamicLightColorScheme(LocalContext.current)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = colorSch.surfaceContainer
+        ),
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Row(
@@ -546,11 +594,13 @@ fun NodeEditor(
                     FunctionSelector(node.op, binary = false) {
                         onChange(FNode.Unary(it, node.child))
                     }
-                    NodeEditor(
-                        node = node.child,
-                        onChange = { onChange(FNode.Unary(node.op, it)) },
-                        onDelete = null
-                    )
+                    ChildrenBlock(accent = colorSch.outline) {
+                        NodeEditor(
+                            node = node.child,
+                            onChange = { onChange(FNode.Unary(node.op, it)) },
+                            onDelete = null
+                        )
+                    }
                 }
 
                 is FNode.Binary -> {
@@ -563,19 +613,52 @@ fun NodeEditor(
                             onChange(FNode.Binary(it, node.left, node.right))
                         }
                     }
-                    NodeEditor(
-                        node = node.left,
-                        onChange = { onChange(FNode.Binary(node.op, it, node.right)) },
-                        onDelete = null
-                    )
-                    NodeEditor(
-                        node = node.right,
-                        onChange = { onChange(FNode.Binary(node.op, node.left, it)) },
-                        onDelete = null
-                    )
+                    ChildrenBlock(accent = colorSch.outline) {
+                        NodeEditor(
+                            node = node.left,
+                            onChange = { onChange(FNode.Binary(node.op, it, node.right)) },
+                            onDelete = null
+                        )
+                        NodeEditor(
+                            node = node.right,
+                            onChange = { onChange(FNode.Binary(node.op, node.left, it)) },
+                            onDelete = null
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * 子节点容器：左侧竖向连接线 + 缩进，
+ * 用于直观表达“父节点 -> 子表达式”的层级关系。
+ */
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+private fun ChildrenBlock(
+    accent: Color,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 6.dp, top = 6.dp)
+            .height(IntrinsicSize.Min)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(accent)
+        )
+        Column(
+            modifier = Modifier
+                .padding(start = 10.dp)
+                .weight(1f),
+            content = content
+        )
     }
 }
 

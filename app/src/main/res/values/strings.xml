@@ -57,4 +57,11 @@
     <string name="formula_type_variable">Variable</string>
     <string name="formula_type_operator">Operator</string>
     <string name="formula_type_function">Function</string>
+
+    <!-- Progress / calibration state -->
+    <string name="progress_label">Progress</string>
+    <string name="cal_status_saved">Stored</string>
+    <string name="cal_status_none">Not stored</string>
+    <string name="btn_clear_calibration">Clear calibration</string>
+    <string name="cal_cleared">Calibration cleared</string>
 </resources>

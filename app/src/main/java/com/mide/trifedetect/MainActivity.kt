@@ -86,6 +86,9 @@ class MainActivity : ComponentActivity() {
     var calibrationValue: MutableState<Double> = mutableDoubleStateOf(0.0)
     var calibrationUv: MutableState<Int> = mutableIntStateOf(0)
 
+    /** 当前设备是否已存储校准值 */
+    var hasCalibration: MutableState<Boolean> = mutableStateOf(false)
+
     /** 全局公式表达式 */
     var formulaText: MutableState<String> = mutableStateOf(Formula.DEFAULT_EXPRESSION)
 
@@ -367,7 +370,7 @@ class MainActivity : ComponentActivity() {
             TriFeProtocol.DeviceCmd.STATUS -> {
                 TriFeProtocol.parseStatus(frame)?.let { s ->
                     s.workState?.let { applyWorkState(it) }
-                    progress.value = s.progress
+                    progress.value = s.progress.coerceIn(0, 100)
                     battery.value = s.battery
                 }
             }
@@ -378,6 +381,9 @@ class MainActivity : ComponentActivity() {
         workStatus.value = st.value
         bluetoothThreadCtrl.value = st == TriFeProtocol.WorkState.WORKING
         if (!st.isError) lastError.value = ""
+        if (st == TriFeProtocol.WorkState.CALIBRATION || st == TriFeProtocol.WorkState.WORKING) {
+            progress.value = 0
+        }
     }
 
     private fun reportError(st: TriFeProtocol.WorkState) {
@@ -406,12 +412,26 @@ class MainActivity : ComponentActivity() {
         }
         calibrationValue.value = c.rawValue
         calibrationUv.value = c.uvLightLevel
+        hasCalibration.value = true
         runOnUiThread {
             Toast.makeText(this, getString(R.string.cal_saved), Toast.LENGTH_SHORT).show()
             logLine(
                 "校准完成: raw=${formatValue(c.rawValue)} uv=${c.uvLightLevel}" +
                         if (mac.isNotEmpty()) " (已保存 $mac)" else ""
             )
+        }
+    }
+
+    /** 清除当前设备已存储的校准值, 并复位为 0 */
+    fun clearCalibration() {
+        val mac = activeMac.value
+        if (mac.isNotEmpty()) formulaStore.clearCalibration(mac)
+        calibrationValue.value = 0.0
+        calibrationUv.value = 0
+        hasCalibration.value = false
+        toast(getString(R.string.cal_cleared))
+        runOnUiThread {
+            logLine("已清除校准值" + if (mac.isNotEmpty()) " ($mac)" else "")
         }
     }
 
@@ -476,6 +496,7 @@ class MainActivity : ComponentActivity() {
         lastError.value = ""
         calibrationValue.value = 0.0
         calibrationUv.value = 0
+        hasCalibration.value = false
         workStatus.value = TriFeProtocol.WorkState.READY.value
         progress.value = 0
         toast(getString(R.string.bt_disconnected))
@@ -587,6 +608,7 @@ class MainActivity : ComponentActivity() {
                     val cal = formulaStore.getCalibration(mac)
                     calibrationValue.value = cal?.rawValue ?: 0.0
                     calibrationUv.value = cal?.uvLightLevel ?: 0
+                    hasCalibration.value = cal != null
 
                     val idx = devicesListUi.indexOfFirst { it.mac == mac }
                     if (idx != -1) {
