@@ -509,13 +509,16 @@ fun FormulaPage(modifier: Modifier = Modifier) {
             )
         }
         Text(
-            text = stringResource(R.string.formula_test) + ": cal=" + (ctx?.formatValue(cal) ?: "0") +
+            text = stringResource(R.string.formula_test) + ": cal=" + (ctx?.formatValue(cal)
+                ?: "0") +
                     ", val=" + (ctx?.formatValue(valIn) ?: "0") + "  →  " +
-                    (testResult?.let { if (it.isNaN() || it.isInfinite()) "—" else ctx?.formatValue(it) } ?: "—")
+                    (testResult?.let {
+                        if (it.isNaN() || it.isInfinite()) "—" else ctx?.formatValue(
+                            it
+                        )
+                    } ?: "—")
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-        HorizontalDivider()
         Spacer(modifier = Modifier.height(12.dp))
 
         NodeEditor(
@@ -735,7 +738,15 @@ fun ConvertMenu(onConvert: (FNode) -> Unit) {
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.formula_type_operator)) },
-                onClick = { expanded = false; onConvert(FNode.Binary("+", FNode.Num(0.0), FNode.Num(0.0))) }
+                onClick = {
+                    expanded = false; onConvert(
+                    FNode.Binary(
+                        "+",
+                        FNode.Num(0.0),
+                        FNode.Num(0.0)
+                    )
+                )
+                }
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.formula_type_function)) },
