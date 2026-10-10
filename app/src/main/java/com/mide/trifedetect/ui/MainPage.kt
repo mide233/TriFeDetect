@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -42,6 +43,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
@@ -190,21 +192,23 @@ fun Greeting(
                     }
                 }
             }
-            OutlinedCard(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = colorSch.surfaceContainer,
-                ),
-            ) {
-                val scrollState = rememberScrollState()
-                Text(
-                    text = suggestBoxText.value,
+            if (ctx?.showLog?.value == true) {
+                OutlinedCard(
                     modifier = Modifier
-                        .padding(10.dp)
-                        .verticalScroll(scrollState)
-                )
+                        .fillMaxSize()
+                        .padding(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = colorSch.surfaceContainer,
+                    ),
+                ) {
+                    val scrollState = rememberScrollState()
+                    Text(
+                        text = suggestBoxText.value,
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .verticalScroll(scrollState)
+                    )
+                }
             }
         }
         FloatingActionButton(
@@ -341,7 +345,10 @@ fun BluetoothDeviceCard(
                 Text(text = deviceName)
                 Text(text = deviceMac, fontSize = 12.sp)
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 8.dp)
+            ) {
                 if (isActive) {
                     Icon(
                         Icons.Filled.Check,
@@ -477,6 +484,7 @@ fun FormulaPage(modifier: Modifier = Modifier) {
         Text(text = stringResource(R.string.formula_preview) + ":")
         Surface(
             color = colorSch.surfaceVariant,
+            shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 6.dp)
@@ -531,6 +539,18 @@ fun FormulaPage(modifier: Modifier = Modifier) {
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = stringResource(R.string.show_log), fontSize = 16.sp)
+            Switch(
+                checked = ctx?.showLog?.value == true,
+                onCheckedChange = { ctx?.setShowLog(it) }
+            )
+        }
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(12.dp))

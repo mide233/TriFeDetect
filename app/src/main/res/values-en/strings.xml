@@ -66,4 +66,5 @@
     <string name="btn_clear_calibration">Clear calibration</string>
     <string name="cal_cleared">Calibration cleared</string>
     <string name="err_cannot_run">Cannot start: device is in error state (%1$s)</string>
+    <string name="show_log">Show log</string>
 </resources>

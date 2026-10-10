@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
         const val SPP_UUID = "00001101-0000-1000-8000-00805F9B34FB"
         const val DEVICE_PREFIX = "CONC_"
         const val STATUS_POLL_MS = 1000L
+        const val PREF_NAME = "trifedetect"
+        const val KEY_SHOW_LOG = "show_log"
     }
 
     var bluetoothText: MutableState<String> = mutableStateOf("")
@@ -91,6 +93,9 @@ class MainActivity : ComponentActivity() {
 
     /** 全局公式表达式 */
     var formulaText: MutableState<String> = mutableStateOf(Formula.DEFAULT_EXPRESSION)
+
+    /** 是否在主页显示日志框 (默认关) */
+    var showLog: MutableState<Boolean> = mutableStateOf(false)
 
     private lateinit var formulaStore: FormulaStore
     private val frameParser = TriFeProtocol.FrameParser()
@@ -164,6 +169,8 @@ class MainActivity : ComponentActivity() {
 
         formulaStore = FormulaStore(this)
         formulaText = mutableStateOf(formulaStore.getFormula())
+        showLog.value = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+            .getBoolean(KEY_SHOW_LOG, false)
 
         bluetoothText = mutableStateOf(getString(R.string.loading))
 
@@ -440,9 +447,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** 切换主页日志框显示, 并持久化 */
+    fun setShowLog(v: Boolean) {
+        showLog.value = v
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit()
+            .putBoolean(KEY_SHOW_LOG, v).apply()
+    }
+
     /** 清除当前设备已存储的校准值, 并复位为 0 */
-    fun clearCalibration() {
-        val mac = activeMac.value
+    fun clearCalibration() {        val mac = activeMac.value
         if (mac.isNotEmpty()) formulaStore.clearCalibration(mac)
         calibrationValue.value = 0.0
         calibrationUv.value = 0
