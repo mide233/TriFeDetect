@@ -411,11 +411,15 @@ fun BluetoothPage(
                 1 -> {
                     val devices = ctx?.devicesListUi ?: mutableListOf()
                     if (devices.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.bt_empty_hint),
+                        Box(
                             modifier = Modifier.fillMaxSize(),
-                            textAlign = TextAlign.Center,
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.bt_empty_hint),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                     } else {
                         LazyColumn {
                             items(devices) { item ->
@@ -573,6 +577,8 @@ fun FormulaPage(modifier: Modifier = Modifier) {
         ) {
             Text(text = stringResource(R.string.btn_clear_calibration))
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
