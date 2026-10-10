@@ -408,19 +408,28 @@ fun BluetoothPage(
                     textAlign = TextAlign.Center,
                 )
 
-                1 -> LazyColumn {
-                    items(
-                        ctx?.devicesListUi ?: mutableListOf()
-                    ) { item ->
-                        BluetoothDeviceCard(
-                            deviceName = item.name,
-                            isBonded = item.isConnected,
-                            isValid = item.isValid,
-                            deviceMac = item.mac,
-                            isActive = ctx?.activeMac?.value == item.mac,
-                            onConnect = { ctx?.connectDevice(item.mac) },
-                            onDisconnect = { ctx?.disconnectDevice() }
+                1 -> {
+                    val devices = ctx?.devicesListUi ?: mutableListOf()
+                    if (devices.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.bt_empty_hint),
+                            modifier = Modifier.fillMaxSize(),
+                            textAlign = TextAlign.Center,
                         )
+                    } else {
+                        LazyColumn {
+                            items(devices) { item ->
+                                BluetoothDeviceCard(
+                                    deviceName = item.name,
+                                    isBonded = item.isConnected,
+                                    isValid = item.isValid,
+                                    deviceMac = item.mac,
+                                    isActive = ctx?.activeMac?.value == item.mac,
+                                    onConnect = { ctx?.connectDevice(item.mac) },
+                                    onDisconnect = { ctx?.disconnectDevice() }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -540,18 +549,6 @@ fun FormulaPage(modifier: Modifier = Modifier) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = stringResource(R.string.show_log), fontSize = 16.sp)
-            Switch(
-                checked = ctx?.showLog?.value == true,
-                onCheckedChange = { ctx?.setShowLog(it) }
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider()
         Spacer(modifier = Modifier.height(12.dp))
         Text(
@@ -575,6 +572,18 @@ fun FormulaPage(modifier: Modifier = Modifier) {
             enabled = ctx?.bluetoothSocket != null
         ) {
             Text(text = stringResource(R.string.btn_clear_calibration))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = stringResource(R.string.show_log), fontSize = 16.sp)
+            Switch(
+                checked = ctx?.showLog?.value == true,
+                onCheckedChange = { ctx?.setShowLog(it) }
+            )
         }
         Spacer(modifier = Modifier.height(24.dp))
     }
