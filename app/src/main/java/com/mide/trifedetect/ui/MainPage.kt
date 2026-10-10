@@ -3,14 +3,15 @@ package com.mide.trifedetect.ui
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,23 +19,32 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -43,22 +53,26 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mide.trifedetect.FNode
+import com.mide.trifedetect.Formula
 import com.mide.trifedetect.MainActivity
 import com.mide.trifedetect.R
+import com.mide.trifedetect.TriFeProtocol
 import com.mide.trifedetect.ui.theme.TriFeDetectTheme
 import kotlinx.coroutines.delay
 
@@ -72,54 +86,50 @@ fun Greeting(
     displayNum: MutableState<String>
 ) {
     val context = LocalContext.current
+    val ctx = context as? MainActivity
     val colorSch = if (isSystemInDarkTheme()) {
         dynamicDarkColorScheme(context)
     } else {
         dynamicLightColorScheme(context)
     }
 
-    fun bytes(vararg values: Int) = values.map { it.toByte() }
-    fun Boolean.toInt(): Int = if (this) 1 else 0
-
-    if (context is MainActivity) {
-        if (context.bluetoothSocket == null) {
-            AlertDialog(
-                onDismissRequest = {
-                    // 当用户点击对话框以外的地方或者按下系统返回键将会执行的代码
-                },
-                title = {
+    if (ctx != null && ctx.bluetoothSocket == null) {
+        AlertDialog(
+            onDismissRequest = {
+                // 用户点击对话框以外或返回键时保持不变
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.disconnect),
+                    fontWeight = FontWeight.W700
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.go_connect_first),
+                    fontSize = 16.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { navPageNum.value = 1 },
+                ) {
                     Text(
-                        text = stringResource(R.string.disconnect),
-                        fontWeight = FontWeight.W700
+                        text = stringResource(R.string.confirm),
+                        fontWeight = FontWeight.W700,
                     )
-                },
-                text = {
-                    Text(
-                        text = stringResource(R.string.go_connect_first),
-                        fontSize = 16.sp
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            navPageNum.value = 1
-                        },
-                    ) {
-                        Text(
-                            text = stringResource(R.string.confirm),
-                            fontWeight = FontWeight.W700,
-
-                            )
-                    }
-                },
-                dismissButton = {}
-            )
-        }
+                }
+            },
+            dismissButton = {}
+        )
     }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column {
-            Column(modifier = Modifier.padding(top = 30.dp, start = 30.dp, end = 30.dp)) {
+            if (ctx != null) {
+                StatusCard(ctx)
+            }
+            Column(modifier = Modifier.padding(top = 20.dp, start = 30.dp, end = 30.dp)) {
                 Text(text = stringResource(R.string.tri_fe_ppm))
                 Text(
                     text = displayNum.value,
@@ -129,12 +139,46 @@ fun Greeting(
                     color = colorSch.primary,
                     softWrap = false
                 )
-
+                if (ctx != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.raw_value_label) + ": " +
+                                    ctx.formatValue(ctx.rawResult.value),
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = stringResource(R.string.calibration_label) + ": " +
+                                    ctx.formatValue(ctx.calibrationValue.value),
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { ctx?.sendCalibration() },
+                        enabled = ctx?.bluetoothSocket != null
+                    ) {
+                        Text(text = stringResource(R.string.btn_calibrate))
+                    }
+                    OutlinedButton(
+                        onClick = { ctx?.requestStatus() },
+                        enabled = ctx?.bluetoothSocket != null
+                    ) {
+                        Text(text = stringResource(R.string.btn_refresh_status))
+                    }
+                }
             }
             OutlinedCard(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(30.dp),
+                    .padding(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = colorSch.surfaceContainer,
                 ),
@@ -147,34 +191,21 @@ fun Greeting(
                         .verticalScroll(scrollState)
                 )
             }
-
         }
         FloatingActionButton(
             onClick = {
-                if (context is MainActivity) {
-                    if (context.bluetoothThread?.isAlive == true) {
-                        bluetoothThreadCtrl.value = !bluetoothThreadCtrl.value
-                        if (bluetoothThreadCtrl.value) Toast.makeText(
-                            context,
-                            context.getString(R.string.try_again),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        context.bluetoothSendQueue.addAll(
-                            bytes(
-                                0x39, bluetoothThreadCtrl.value.toInt(),
-                                0x0D
-                            )
-                        )
+                if (ctx != null) {
+                    if (ctx.currentWorkState() == TriFeProtocol.WorkState.WORKING) {
+                        ctx.sendStop()
+                    } else {
+                        ctx.sendStart()
                     }
                 }
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(horizontal = 20.dp, vertical = 28.dp),
-            elevation = FloatingActionButtonDefaults.elevation(
-                3.dp,
-                8.dp
-            )
+            elevation = FloatingActionButtonDefaults.elevation(3.dp, 8.dp)
         ) {
             if (bluetoothThreadCtrl.value) {
                 Icon(
@@ -188,8 +219,53 @@ fun Greeting(
                 )
             }
         }
+    }
+}
 
+/** 主页常驻状态条: 工作状态 / 错误 / 进度 / 电量 */
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun StatusCard(ctx: MainActivity) {
+    val colorSch = if (isSystemInDarkTheme()) {
+        dynamicDarkColorScheme(ctx)
+    } else {
+        dynamicLightColorScheme(ctx)
+    }
+    val isErr = ctx.lastError.value.isNotEmpty()
+    val stateText = ctx.currentWorkState()?.let { ctx.workStateMessage(it) }
+        ?: stringResource(R.string.status_unknown)
 
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isErr) colorSch.errorContainer else colorSch.primaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.status_label) + ": " + stateText,
+                fontWeight = FontWeight.W600
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { (ctx.progress.value.coerceIn(0, 100)) / 100f },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    text = stringResource(R.string.battery_label) + ": ${ctx.battery.value}%",
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = stringResource(R.string.device_label) + ": " +
+                            (ctx.activeMac.value.ifEmpty { stringResource(R.string.no_device) }),
+                    fontSize = 13.sp
+                )
+            }
+        }
     }
 }
 
@@ -197,9 +273,12 @@ fun Greeting(
 @Composable
 fun BluetoothDeviceCard(
     deviceName: String,
-    isConnected: Boolean,
+    isBonded: Boolean,
     isValid: Boolean,
-    deviceMac: String
+    deviceMac: String,
+    isActive: Boolean,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit
 ) {
     val context = LocalContext.current
     val colorSch = if (isSystemInDarkTheme()) {
@@ -211,47 +290,46 @@ fun BluetoothDeviceCard(
         .fillMaxWidth()
         .padding(bottom = 10.dp, start = 20.dp, end = 20.dp)
 
-    if (isConnected && isValid) {
-        if (context is MainActivity) {
-            if (context.bluetoothSocket == null) {
-                context.connectedDeviceMac = deviceMac
-            }
-        }
-    }
-
     Card(
-        modifier = if (isValid && !isConnected) cardModifier.clickable {
-            if (context is MainActivity) {
-                context.connectedDeviceMac = deviceMac
-            }
-        } else cardModifier,
+        modifier = cardModifier,
         colors = CardDefaults.cardColors(
-            containerColor = if (isValid) colorSch.secondaryContainer else colorSch.surfaceContainer,
+            containerColor = when {
+                isActive -> colorSch.primaryContainer
+                isValid -> colorSch.secondaryContainer
+                else -> colorSch.surfaceContainer
+            },
         )
     ) {
         Row(
             horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxSize()
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = deviceName,
-                modifier = Modifier
-                    .padding(20.dp)
-            )
-            if (isConnected && isValid) Icon(
-                Icons.Filled.Check,
-                contentDescription = "Connected Icon",
-                modifier = Modifier
-                    .align(Alignment.CenterVertically)
-                    .padding(15.dp)
-            ) else if (isConnected) Icon(
-                painterResource(id = R.drawable.link_24px),
-                contentDescription = "Connected Icon",
-                modifier = Modifier
-                    .align(Alignment.CenterVertically)
-                    .padding(15.dp)
-            )
-
+            Column(modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 12.dp)) {
+                Text(text = deviceName)
+                Text(text = deviceMac, fontSize = 12.sp)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isActive) {
+                    Icon(
+                        Icons.Filled.Check,
+                        contentDescription = "Connected Icon",
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    TextButton(onClick = onDisconnect) {
+                        Text(text = stringResource(R.string.btn_disconnect))
+                    }
+                } else if (isValid) {
+                    if (isBonded) Icon(
+                        painterResource(id = R.drawable.link_24px),
+                        contentDescription = "Bonded Icon",
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    TextButton(onClick = onConnect) {
+                        Text(text = stringResource(R.string.btn_connect))
+                    }
+                }
+            }
         }
     }
 }
@@ -264,13 +342,12 @@ fun BluetoothPage(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isDiscovering = remember { mutableStateOf(false) }
-    if (context is MainActivity && bluetoothStatus.value == 1) {
-        isDiscovering =
-            remember { mutableStateOf(context.bluetoothAdapter?.isDiscovering == true) }
-        LaunchedEffect(context.bluetoothAdapter) {
+    val ctx = context as? MainActivity
+    val isDiscovering = remember { mutableStateOf(false) }
+    if (ctx != null && bluetoothStatus.value == 1) {
+        LaunchedEffect(ctx.bluetoothAdapter) {
             while (true) {
-                isDiscovering.value = context.bluetoothAdapter?.isDiscovering == true
+                isDiscovering.value = ctx.bluetoothAdapter?.isDiscovering == true
                 delay(1000)
             }
         }
@@ -283,7 +360,6 @@ fun BluetoothPage(
                         .fillMaxWidth()
                         .padding(bottom = 15.dp)
                 )
-
             }
 
             when (bluetoothStatus.value) {
@@ -291,21 +367,20 @@ fun BluetoothPage(
                     text = bluetoothText.value,
                     modifier = Modifier.fillMaxSize(),
                     textAlign = TextAlign.Center,
-
-                    )
+                )
 
                 1 -> LazyColumn {
                     items(
-                        if (context is MainActivity) {
-                            context.devicesListUi
-                        } else mutableListOf()
-
+                        ctx?.devicesListUi ?: mutableListOf()
                     ) { item ->
                         BluetoothDeviceCard(
                             deviceName = item.name,
-                            isConnected = item.isConnected,
+                            isBonded = item.isConnected,
                             isValid = item.isValid,
-                            deviceMac = item.mac
+                            deviceMac = item.mac,
+                            isActive = ctx?.activeMac?.value == item.mac,
+                            onConnect = { ctx?.connectDevice(item.mac) },
+                            onDisconnect = { ctx?.disconnectDevice() }
                         )
                     }
                 }
@@ -313,24 +388,287 @@ fun BluetoothPage(
         }
 
         FloatingActionButton(
-            onClick = {
-                if (context is MainActivity) {
-                    context.checkBluetoothPermission()
-
-                }
-            },
+            onClick = { ctx?.checkBluetoothPermission() },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(horizontal = 20.dp, vertical = 28.dp),
-            elevation = FloatingActionButtonDefaults.elevation(
-                3.dp,
-                8.dp
-            )
+            elevation = FloatingActionButtonDefaults.elevation(3.dp, 8.dp)
         ) {
             Icon(
                 Icons.Filled.Refresh,
                 contentDescription = "Refresh Bluetooth"
             )
+        }
+    }
+}
+
+// =====================================================================
+//                            公式编辑页
+// =====================================================================
+
+private fun defaultFormulaRoot(): FNode =
+    FNode.Binary("-", FNode.Variable("val"), FNode.Variable("cal"))
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun FormulaPage(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val ctx = context as? MainActivity
+    val colorSch = if (isSystemInDarkTheme()) {
+        dynamicDarkColorScheme(context)
+    } else {
+        dynamicLightColorScheme(context)
+    }
+
+    val initial = remember {
+        runCatching { Formula.parse(ctx?.formulaText?.value ?: Formula.DEFAULT_EXPRESSION) }
+            .getOrDefault(defaultFormulaRoot())
+    }
+    val root = remember { mutableStateOf(initial) }
+
+    val cal = ctx?.calibrationValue?.value ?: 0.0
+    val valIn = ctx?.rawResult?.value ?: 0.0
+    val testResult = runCatching { Formula.evaluate(root.value, cal, valIn) }.getOrNull()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.formula_heading),
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = stringResource(R.string.formula_preview) + ":")
+        Surface(
+            color = colorSch.surfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+        ) {
+            Text(
+                text = Formula.toExpression(root.value),
+                modifier = Modifier.padding(10.dp),
+                fontWeight = FontWeight.W600
+            )
+        }
+        Text(
+            text = stringResource(R.string.formula_test) + ": cal=" + (ctx?.formatValue(cal) ?: "0") +
+                    ", val=" + (ctx?.formatValue(valIn) ?: "0") + "  →  " +
+                    (testResult?.let { if (it.isNaN() || it.isInfinite()) "—" else ctx?.formatValue(it) } ?: "—")
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(12.dp))
+
+        NodeEditor(
+            node = root.value,
+            onChange = { root.value = it },
+            onDelete = null
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = {
+                    val err = ctx?.saveFormula(Formula.toExpression(root.value))
+                    if (err == null) {
+                        Toast.makeText(context, R.string.formula_saved, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.formula_invalid, err),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            ) {
+                Text(text = stringResource(R.string.formula_save))
+            }
+            OutlinedButton(
+                onClick = { root.value = defaultFormulaRoot() }
+            ) {
+                Text(text = stringResource(R.string.formula_reset))
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+private fun typeNameRes(node: FNode): Int = when (node) {
+    is FNode.Num -> R.string.formula_type_number
+    is FNode.Variable -> R.string.formula_type_variable
+    is FNode.Unary -> R.string.formula_type_function
+    is FNode.Binary ->
+        if (node.op in Formula.BINARY_FUNCTIONS) R.string.formula_type_function
+        else R.string.formula_type_operator
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun NodeEditor(
+    node: FNode,
+    onChange: (FNode) -> Unit,
+    onDelete: (() -> Unit)?
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = stringResource(typeNameRes(node)), fontWeight = FontWeight.W600)
+                Row {
+                    ConvertMenu(onConvert = onChange)
+                    if (onDelete != null) {
+                        IconButton(onClick = onDelete) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                        }
+                    }
+                }
+            }
+            when (node) {
+                is FNode.Num -> NumberField(node, onChange)
+                is FNode.Variable -> VariableSelector(node, onChange)
+                is FNode.Unary -> {
+                    FunctionSelector(node.op, binary = false) {
+                        onChange(FNode.Unary(it, node.child))
+                    }
+                    NodeEditor(
+                        node = node.child,
+                        onChange = { onChange(FNode.Unary(node.op, it)) },
+                        onDelete = null
+                    )
+                }
+
+                is FNode.Binary -> {
+                    if (node.op in Formula.BINARY_FUNCTIONS) {
+                        FunctionSelector(node.op, binary = true) {
+                            onChange(FNode.Binary(it, node.left, node.right))
+                        }
+                    } else {
+                        OperatorSelector(node.op) {
+                            onChange(FNode.Binary(it, node.left, node.right))
+                        }
+                    }
+                    NodeEditor(
+                        node = node.left,
+                        onChange = { onChange(FNode.Binary(node.op, it, node.right)) },
+                        onDelete = null
+                    )
+                    NodeEditor(
+                        node = node.right,
+                        onChange = { onChange(FNode.Binary(node.op, node.left, it)) },
+                        onDelete = null
+                    )
+                }
+            }
+        }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun ConvertMenu(onConvert: (FNode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(text = stringResource(R.string.formula_change_type))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.formula_type_number)) },
+                onClick = { expanded = false; onConvert(FNode.Num(0.0)) }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.formula_type_variable)) },
+                onClick = { expanded = false; onConvert(FNode.Variable("val")) }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.formula_type_operator)) },
+                onClick = { expanded = false; onConvert(FNode.Binary("+", FNode.Num(0.0), FNode.Num(0.0))) }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.formula_type_function)) },
+                onClick = { expanded = false; onConvert(FNode.Unary("abs", FNode.Num(0.0))) }
+            )
+        }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun NumberField(node: FNode.Num, onChange: (FNode) -> Unit) {
+    var text by remember { mutableStateOf(Formula.toExpression(node)) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { s ->
+            text = s
+            s.toDoubleOrNull()?.let { onChange(FNode.Num(it)) }
+        },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun VariableSelector(node: FNode.Variable, onChange: (FNode) -> Unit) {
+    DropdownButton(
+        label = node.name,
+        options = Formula.VARIABLES,
+        onSelect = { onChange(FNode.Variable(it)) }
+    )
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun OperatorSelector(op: String, onSelect: (String) -> Unit) {
+    DropdownButton(
+        label = op,
+        options = Formula.OPERATORS + Formula.BINARY_FUNCTIONS,
+        onSelect = onSelect
+    )
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun FunctionSelector(op: String, binary: Boolean, onSelect: (String) -> Unit) {
+    val options = if (binary) Formula.BINARY_FUNCTIONS else listOf("-") + Formula.UNARY_FUNCTIONS
+    DropdownButton(label = op, options = options, onSelect = onSelect)
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Composable
+fun DropdownButton(
+    label: String,
+    options: List<String>,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(text = label)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { opt ->
+                DropdownMenuItem(
+                    text = { Text(opt) },
+                    onClick = { expanded = false; onSelect(opt) }
+                )
+            }
         }
     }
 }
@@ -345,7 +683,7 @@ fun GreetingPreview(
     navPageNum: MutableState<Int> = mutableIntStateOf(0),
     suggestBoxText: MutableState<String> = mutableStateOf(stringResource(R.string.loading)),
     bluetoothThreadCtrl: MutableState<Boolean> = mutableStateOf(false),
-    displayNum: MutableState<String> = mutableStateOf("Loading...")
+    displayNum: MutableState<String> = mutableStateOf("—")
 ) {
     val context = LocalContext.current
     val bluetoothConnectStatus = remember { mutableStateOf(false) }
@@ -380,8 +718,7 @@ fun GreetingPreview(
                                     ) else ""
                         )
                     },
-                    navigationIcon = {
-                    }
+                    navigationIcon = {}
                 )
             },
             bottomBar = {
@@ -391,9 +728,7 @@ fun GreetingPreview(
                             icon = { icons[index]() },
                             label = { Text(item) },
                             selected = navPageNum.value == index,
-                            onClick = {
-                                navPageNum.value = index
-                            }
+                            onClick = { navPageNum.value = index }
                         )
                     }
                 }
@@ -414,9 +749,10 @@ fun GreetingPreview(
                     modifier = Modifier.padding(innerPadding)
                 )
 
-
+                2 -> FormulaPage(
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
         }
     }
 }
-

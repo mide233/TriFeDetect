@@ -19,4 +19,43 @@
     <string name="connected">Connected</string>
     <string name="setting_page">Settings</string>
 
+    <!-- Work status / errors -->
+    <string name="status_label">Status</string>
+    <string name="status_unknown">Unknown</string>
+    <string name="status_ready">Ready</string>
+    <string name="status_calibrating">Calibrating…</string>
+    <string name="status_working">Measuring…</string>
+    <string name="err_tilt">Device is tilted, please keep it level</string>
+    <string name="err_open">Lid opened or not sealed</string>
+    <string name="err_low_power">Low battery</string>
+    <string name="err_no_container">No container detected</string>
+
+    <!-- Home page -->
+    <string name="battery_label">Battery</string>
+    <string name="device_label">Device</string>
+    <string name="no_device">None</string>
+    <string name="btn_calibrate">Calibrate</string>
+    <string name="btn_refresh_status">Refresh status</string>
+    <string name="calibration_label">Calibration</string>
+    <string name="raw_value_label">Raw</string>
+    <string name="cal_saved">Calibration saved</string>
+
+    <!-- Bluetooth page -->
+    <string name="btn_connect">Connect</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="bt_disconnected">Disconnected</string>
+
+    <!-- Formula editor -->
+    <string name="formula_heading">Formula editor</string>
+    <string name="formula_preview">Expression</string>
+    <string name="formula_test">Test</string>
+    <string name="formula_save">Save</string>
+    <string name="formula_reset">Reset</string>
+    <string name="formula_saved">Formula saved</string>
+    <string name="formula_invalid">Invalid formula: %1$s</string>
+    <string name="formula_change_type">Type</string>
+    <string name="formula_type_number">Number</string>
+    <string name="formula_type_variable">Variable</string>
+    <string name="formula_type_operator">Operator</string>
+    <string name="formula_type_function">Function</string>
 </resources>
