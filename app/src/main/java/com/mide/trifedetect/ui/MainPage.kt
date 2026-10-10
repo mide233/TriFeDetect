@@ -161,29 +161,15 @@ fun Greeting(
                             fontSize = 14.sp
                         )
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.calibration_label) + ": " +
-                                    stringResource(
-                                        if (ctx.hasCalibration.value) R.string.cal_status_saved
-                                        else R.string.cal_status_none
-                                    ),
-                            fontSize = 14.sp,
-                            color = colorSch.primary
-                        )
-                        if (ctx.hasCalibration.value) {
-                            OutlinedButton(
-                                onClick = { ctx.clearCalibration() },
-                                enabled = ctx.bluetoothSocket != null
-                            ) {
-                                Text(text = stringResource(R.string.btn_clear_calibration))
-                            }
-                        }
-                    }
+                    Text(
+                        text = stringResource(R.string.calibration_label) + ": " +
+                                stringResource(
+                                    if (ctx.hasCalibration.value) R.string.cal_status_saved
+                                    else R.string.cal_status_none
+                                ),
+                        fontSize = 14.sp,
+                        color = colorSch.primary
+                    )
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
@@ -224,7 +210,7 @@ fun Greeting(
         FloatingActionButton(
             onClick = {
                 if (ctx != null) {
-                    if (ctx.currentWorkState() == TriFeProtocol.WorkState.WORKING) {
+                    if (bluetoothThreadCtrl.value) {
                         ctx.sendStop()
                     } else {
                         ctx.sendStart()
@@ -273,7 +259,12 @@ fun StatusCard(ctx: MainActivity) {
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isErr) colorSch.errorContainer else colorSch.primaryContainer
+            containerColor = when {
+                isErr -> colorSch.errorContainer
+                running -> colorSch.tertiaryContainer
+                state == TriFeProtocol.WorkState.READY -> colorSch.primaryContainer
+                else -> colorSch.surfaceVariant
+            }
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -282,11 +273,13 @@ fun StatusCard(ctx: MainActivity) {
                 fontWeight = FontWeight.W600
             )
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.progress_label) + ": $shownProgress%",
-                fontSize = 13.sp
-            )
-            Spacer(modifier = Modifier.height(6.dp))
+            if (running) {
+                Text(
+                    text = stringResource(R.string.progress_label) + ": $shownProgress%",
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
             LinearProgressIndicator(
                 progress = { shownProgress / 100f },
                 modifier = Modifier.fillMaxWidth(),
@@ -536,6 +529,32 @@ fun FormulaPage(modifier: Modifier = Modifier) {
             ) {
                 Text(text = stringResource(R.string.formula_reset))
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.device_label) + ": " +
+                    (ctx?.activeMac?.value?.takeIf { it.isNotEmpty() }
+                        ?: stringResource(R.string.no_device)),
+            fontSize = 14.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.calibration_label) + ": " +
+                    stringResource(
+                        if (ctx?.hasCalibration?.value == true) R.string.cal_status_saved
+                        else R.string.cal_status_none
+                    ),
+            fontSize = 14.sp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { ctx?.clearCalibration() },
+            enabled = ctx?.bluetoothSocket != null
+        ) {
+            Text(text = stringResource(R.string.btn_clear_calibration))
         }
         Spacer(modifier = Modifier.height(24.dp))
     }

@@ -335,9 +335,26 @@ class MainActivity : ComponentActivity() {
         enqueueFrame(TriFeProtocol.buildFrame(cmd))
     }
 
-    fun sendStart() = sendCommand(TriFeProtocol.HostCmd.START)
+    fun sendStart() {
+        val st = currentWorkState()
+        if (st?.isError == true) {
+            toast(getString(R.string.err_cannot_run, workStateMessage(st)))
+            return
+        }
+        sendCommand(TriFeProtocol.HostCmd.START)
+    }
+
     fun sendStop() = sendCommand(TriFeProtocol.HostCmd.STOP)
-    fun sendCalibration() = sendCommand(TriFeProtocol.HostCmd.CALIBRATION)
+
+    fun sendCalibration() {
+        val st = currentWorkState()
+        if (st?.isError == true) {
+            toast(getString(R.string.err_cannot_run, workStateMessage(st)))
+            return
+        }
+        sendCommand(TriFeProtocol.HostCmd.CALIBRATION)
+    }
+
     fun requestStatus() = sendCommand(TriFeProtocol.HostCmd.STATUS_QUERY)
 
     // ============================================================== 帧处理
@@ -379,7 +396,8 @@ class MainActivity : ComponentActivity() {
 
     private fun applyWorkState(st: TriFeProtocol.WorkState) {
         workStatus.value = st.value
-        bluetoothThreadCtrl.value = st == TriFeProtocol.WorkState.WORKING
+        bluetoothThreadCtrl.value = st == TriFeProtocol.WorkState.WORKING ||
+                st == TriFeProtocol.WorkState.CALIBRATION
         if (!st.isError) lastError.value = ""
         if (st == TriFeProtocol.WorkState.CALIBRATION || st == TriFeProtocol.WorkState.WORKING) {
             progress.value = 0
