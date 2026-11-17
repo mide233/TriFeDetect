@@ -56,6 +56,10 @@ class MainActivity : ComponentActivity() {
         const val SPP_UUID = "00001101-0000-1000-8000-00805F9B34FB"
         const val DEVICE_PREFIX = "CONC_"
         const val STATUS_POLL_MS = 1000L
+        /** 日志框最多保留的字符数, 防止设备持续上报错误时无限增长 */
+        private const val LOG_MAX_CHARS = 20_000
+        /** 两次错误 Toast 的最小间隔, 防止错误状态快速抖动时刷屏 */
+        private const val ERROR_TOAST_MIN_INTERVAL_MS = 2_000L
         const val PREF_NAME = "trifedetect"
         const val KEY_SHOW_LOG = "show_log"
         const val KEY_RESULT_MIN = "result_min"
@@ -120,6 +124,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var formulaStore: FormulaStore
     private val frameParser = TriFeProtocol.FrameParser()
     private var lastStatusQueryMs = 0L
+
+    /** 上一次已提示过的错误状态, 用于抑制设备持续上报同一错误时的重复 Toast */
+    private var lastNotifiedError: TriFeProtocol.WorkState? = null
+    private var lastErrorToastMs = 0L
 
     private val btReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -302,6 +310,7 @@ class MainActivity : ComponentActivity() {
                             if (failureCounter >= 5) {
                                 bluetoothSocket = null
                                 activeMac.value = ""
+                                lastNotifiedError = null
                                 failureCounter = 0
                             }
                         }
@@ -322,6 +331,7 @@ class MainActivity : ComponentActivity() {
                         Log.e(TAG, "Error in bluetooth loop", e)
                         bluetoothSocket = null
                         activeMac.value = ""
+                        lastNotifiedError = null
                         Thread.sleep(2000)
                     }
                 }
@@ -451,7 +461,11 @@ class MainActivity : ComponentActivity() {
         workStatus.value = st.value
         bluetoothThreadCtrl.value = st == TriFeProtocol.WorkState.WORKING ||
                 st == TriFeProtocol.WorkState.CALIBRATION
-        if (!st.isError) lastError.value = ""
+        if (!st.isError) {
+            lastError.value = ""
+            // 恢复正常后复位, 下次再出现同类错误时仍会提示一次
+            lastNotifiedError = null
+        }
         if (st == TriFeProtocol.WorkState.CALIBRATION || st == TriFeProtocol.WorkState.WORKING) {
             progress.value = 0
         }
@@ -460,8 +474,18 @@ class MainActivity : ComponentActivity() {
     private fun reportError(st: TriFeProtocol.WorkState) {
         val msg = workStateMessage(st)
         lastError.value = msg
+
+        // 从机在倾斜等错误状态下会持续/周期性地重复上报同一错误。
+        // 这里只在错误状态发生变化时提示一次, 常驻的错误信息由 StatusCard 展示,
+        // 避免 Toast 队列和日志被刷屏 (严重时会导致界面卡死/OOM 闪退)。
+        val now = System.currentTimeMillis()
+        if (st == lastNotifiedError) return
+        if (now - lastErrorToastMs < ERROR_TOAST_MIN_INTERVAL_MS) return
+        lastNotifiedError = st
+        lastErrorToastMs = now
+
         runOnUiThread {
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            toast(msg)
             logLine("错误: $msg")
         }
     }
@@ -567,7 +591,11 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("SimpleDateFormat")
     private fun logLine(text: String) {
-        suggestBoxText.value += "${SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date())} $text\n"
+        val line = "${SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date())} $text\n"
+        val updated = suggestBoxText.value + line
+        // 只保留最近的日志, 避免长时间运行/错误刷屏导致字符串无限增长
+        suggestBoxText.value = if (updated.length <= LOG_MAX_CHARS) updated
+        else updated.takeLast(LOG_MAX_CHARS).substringAfter('\n', "")
     }
 
     private fun toast(text: String) = runOnUiThread {
@@ -624,6 +652,7 @@ class MainActivity : ComponentActivity() {
         activeMac.value = ""
         bluetoothThreadCtrl.value = false
         lastError.value = ""
+        lastNotifiedError = null
         calibrationValue.value = 0.0
         calibrationUv.value = 0
         hasCalibration.value = false
@@ -735,6 +764,7 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread {
                     connectedDeviceMac = mac
                     activeMac.value = mac
+                    lastNotifiedError = null
                     val cal = formulaStore.getCalibration(mac)
                     calibrationValue.value = cal?.rawValue ?: 0.0
                     calibrationUv.value = cal?.uvLightLevel ?: 0
